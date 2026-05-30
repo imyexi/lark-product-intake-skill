@@ -20,6 +20,24 @@ Base token:
 D4Vjbv19WaVVTwsGKdJcsnt5neg
 ```
 
+## Local Unit Tests
+
+Run the deterministic local CLI tests before publishing documentation or workflow changes:
+
+```powershell
+python -m unittest discover -s tests
+```
+
+Expected result:
+
+```text
+Ran 5 tests
+
+OK
+```
+
+These tests exercise `tools/intake_cli.py` only. They do not call Feishu APIs.
+
 ## CLI Authorization Check
 
 Verify table access:

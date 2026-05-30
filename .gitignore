@@ -1,0 +1,4 @@
+cache/
+intake-tasks/
+__pycache__/
+*.pyc

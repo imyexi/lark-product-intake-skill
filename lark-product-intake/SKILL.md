@@ -13,10 +13,12 @@ This skill is a workflow specification, not a single command. Load the reference
 
 ## Required References
 
+- Read `references/hermes-install.md` when installing or wiring this workflow into Hermes.
 - Read `references/workflow.md` when designing or running the end-to-end conversation.
 - Read `references/state-machine.md` before implementing command handling, task recovery, or product confirmation.
 - Read `references/media-cache.md` before handling Feishu IM images, videos, ordering, deduplication, or local cache paths.
 - Read `references/base-upload.md` before parsing Base links, mapping fields, creating records, or uploading attachments.
+- Read `references/cli-usage.md` before using `tools/intake_cli.py` for local task updates.
 - Read `references/testing.md` before validating the skill, especially with the provided test Base.
 
 ## Operating Rules
