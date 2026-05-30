@@ -9,7 +9,7 @@ Help a buyer in an offline market capture products from mobile Feishu. The buyer
 1. User says `开始录入`.
 2. Create a local task JSON record with status `COLLECTING_TARGET`.
 3. Ask the user to send the target Feishu Base link.
-4. Parse the Base token and optional table ID. If no table ID is present, list tables and ask the user to choose one.
+4. Parse the Base token and optional table ID, then enter `VALIDATING_TARGET`. If no table ID is present, list tables and ask the user to choose one.
 5. Read fields from the chosen table and enter `MAPPING_FIELDS`.
 6. Ask the user to map:
    - Required: raw product description field.
