@@ -1,6 +1,6 @@
 ---
 name: lark-product-intake
-description: Use when Codex or Hermes needs to run a Feishu/Lark product intake workflow: collect product descriptions, images, and videos from a buyer in chat, maintain a multi-turn local task state, confirm each product from all accumulated media rather than only the last image, map fields dynamically, and upload the finished batch to a Feishu Base table.
+description: "Use when Codex or Hermes needs to run a Feishu/Lark product intake workflow: collect product descriptions, images, and videos from a buyer in chat, maintain a multi-turn local task state, confirm each product from all accumulated media rather than only the last image, map fields dynamically, and upload the finished batch to a Feishu Base table."
 ---
 
 # Lark Product Intake
@@ -16,8 +16,9 @@ This skill is a workflow specification, not a single command. Load the reference
 - Read `references/hermes-install.md` when installing or wiring this workflow into Hermes.
 - Read `references/workflow.md` when designing or running the end-to-end conversation.
 - Read `references/state-machine.md` before implementing command handling, task recovery, or product confirmation.
-- Read `references/media-cache.md` before handling Feishu IM images, videos, ordering, deduplication, or local cache paths.
+- Read `references/media-cache.md` before handling Feishu IM images, videos, ordering, deduplication, local cache paths, or recovering video files that were cached under the document cache.
 - Read `references/base-upload.md` before parsing Base links, mapping fields, creating records, or uploading attachments.
+- Read `references/lark-cli-auth-device-flow.md` when `lark-cli` is unbound, user authorization is needed, or Base scopes such as `base:field:read` are missing.
 - Read `references/cli-usage.md` before using `tools/intake_cli.py` for local task updates.
 - Read `references/testing.md` before validating the skill, especially with the provided test Base.
 

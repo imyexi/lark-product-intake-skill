@@ -74,6 +74,25 @@ cache/pi_20260530_103000/p001/001.jpg
 cache/pi_20260530_103000/p001/002.mp4
 ```
 
+## Feishu Video Cache Pitfall
+
+Feishu video messages may arrive through the platform gateway as `MessageType.VIDEO` while the downloaded `.mp4` is first cached under the general document cache, for example:
+
+```text
+{HERMES_HOME}/cache/documents/doc_<uuid>_<original>.mp4
+```
+
+When a user reports that videos were sent but did not appear in product intake:
+
+1. Search all profile cache roots for video extensions, not just the intake product directory or image cache:
+   - `{HERMES_HOME}/cache/documents/*.mp4`
+   - `{HERMES_HOME}/cache/videos/*.mp4`
+   - `{HERMES_HOME}/video_cache/*.mp4`
+   - `{HERMES_HOME}/cache/<task_id>/<product_id>/*.mp4`
+2. If matching files exist in `cache/documents/`, copy them into the deterministic intake cache path for the correct product and append each file to that product's `media[]` as `type: "video"` with its own sequence number.
+3. Preserve the original cached path in a recovery note such as `recovered_from` so upload/retry auditing can explain where the file came from.
+4. If maintaining the Feishu gateway code, make video downloads use the video cache helper rather than the document cache helper so future videos land under the video cache before intake processing.
+
 ## Confirmation Input
 
 When an AI model analyzes a product, pass:

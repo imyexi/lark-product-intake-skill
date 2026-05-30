@@ -74,11 +74,34 @@ Then read fields:
 lark-cli base +field-list --base-token D4Vjbv19WaVVTwsGKdJcsnt5neg --table-id <table_id> --offset 0 --limit 200 --as user
 ```
 
+If `lark-cli` returns `hermes context detected but lark-cli is not bound to it`, do not continue with field guesses. Ask the operator to confirm the identity preset, then bind and authorize:
+
+```bash
+# Safer default if the operator is unsure:
+lark-cli config bind --source hermes --identity bot-only
+
+# Use only after explicit confirmation when user identity is needed for Base access:
+lark-cli config bind --source hermes --identity user-default --force
+lark-cli auth login --recommend
+```
+
+For `lark-cli auth login --recommend`, if the command prints a device verification URL and blocks, generate a QR code and send both the opaque URL and the QR image to the user. Do not open the URL with browser tools because authorization must happen in the user's browser. If the harness cannot safely keep the polling command alive, use the CLI's no-wait/device-code mode described by its output and resume after the user says authorization is complete.
+
 If `need_user_authorization` reports missing `base:table:read`, ask the operator to authorize:
 
 ```bash
 lark-cli auth login --scope "base:table:read"
 ```
+
+If field listing is attempted with app/tenant credentials and Feishu returns `99991672 Access denied`, inspect `permission_violations` and surface the exact authorization scopes and Open Platform authorization URL from the API error. For Base field discovery, the durable scope set is typically one of:
+
+```text
+bitable:app:readonly
+bitable:app
+base:field:read
+```
+
+When the CLI wrapper is unavailable but app credentials are configured, a deterministic fallback is to call the OpenAPI directly: request `tenant_access_token` from `/open-apis/auth/v3/tenant_access_token/internal`, then call `/open-apis/bitable/v1/apps/{base_token}/tables/{table_id}/fields?page_size=100` with `Authorization: Bearer <tenant_access_token>`. Do not print app secrets or tenant tokens in logs or chat.
 
 For upload, the implementation also needs write and attachment scopes required by the local Feishu CLI/app configuration.
 
