@@ -1,0 +1,4 @@
+interface:
+  display_name: "飞书产品录入"
+  short_description: "通过 Hermes 采集产品信息与图片视频并上传飞书表格。"
+  default_prompt: "Use $lark-product-intake to collect product notes, images, and videos in Hermes, then upload the batch to a Feishu Base table."
