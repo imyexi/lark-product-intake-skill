@@ -18,7 +18,17 @@ from typing import Any
 
 ALLOWED_STATES = {"COLLECTING_PRODUCTS", "READY_TO_UPLOAD"}
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp", ".tif", ".tiff", ".heic"}
-VIDEO_EXTENSIONS = {".mp4", ".mov", ".avi", ".mkv", ".webm", ".m4v"}
+VIDEO_EXTENSIONS = {".mp4", ".mov", ".avi", ".mkv", ".webm", ".m4v", ".3gp"}
+MEDIA_EXTENSIONS = IMAGE_EXTENSIONS | VIDEO_EXTENSIONS
+PENDING_DOWNLOAD_STATUSES = {"RECEIVED", "DOWNLOADING"}
+PRODUCT_INTAKE_SCOPES = [
+    "base:field:read",
+    "base:table:read",
+    "base:record:create",
+    "base:record:update",
+    "base:record:read",
+    "docs:document.media:upload",
+]
 SHANGHAI_TZ = timezone(timedelta(hours=8))
 
 
@@ -117,7 +127,7 @@ def media_counts(product: dict[str, Any] | None) -> tuple[int, int, int]:
     media = (product or {}).get("media") or []
     images = sum(1 for item in media if item.get("type") == "image")
     videos = sum(1 for item in media if item.get("type") == "video")
-    pending = sum(1 for item in media if item.get("download_status") in {"RECEIVED", "DOWNLOADING"})
+    pending = sum(1 for item in media if item.get("download_status") in PENDING_DOWNLOAD_STATUSES)
     return images, videos, pending
 
 
@@ -180,12 +190,67 @@ def media_type_for(path: Path) -> str:
 
 
 def cache_root_for(task_path: Path, task_id: str, product_id: str) -> Path:
-    base_dir = task_path.parent.parent if task_path.parent.name == "intake-tasks" else Path.cwd()
-    return base_dir / "cache" / task_id / product_id
+    return task_base_dir(task_path) / "cache" / task_id / product_id
 
 
 def relative_cache_path(task_id: str, product_id: str, filename: str) -> str:
     return Path("cache", task_id, product_id, filename).as_posix()
+
+
+def all_products(task: dict[str, Any]) -> list[dict[str, Any]]:
+    products = list(task.get("products") or [])
+    current = task.get("current_product")
+    if current:
+        products.append(current)
+    return products
+
+
+def registered_cache_paths(task: dict[str, Any]) -> set[str]:
+    paths: set[str] = set()
+    for product in all_products(task):
+        for item in product.get("media") or []:
+            cache_path = str(item.get("cache_path") or "")
+            if cache_path:
+                paths.add(Path(cache_path).as_posix())
+    return paths
+
+
+def task_base_dir(task_path: Path) -> Path:
+    return task_path.parent.parent if task_path.parent.name == "intake-tasks" else Path.cwd()
+
+
+def find_unregistered_media(task_path: Path, task: dict[str, Any]) -> list[str]:
+    cache_root = task_base_dir(task_path) / "cache" / str(task.get("task_id", ""))
+    if not cache_root.is_dir():
+        return []
+    registered = registered_cache_paths(task)
+    unregistered: list[str] = []
+    for path in sorted(cache_root.rglob("*")):
+        if not path.is_file() or path.suffix.lower() not in MEDIA_EXTENSIONS:
+            continue
+        rel = path.relative_to(task_base_dir(task_path)).as_posix()
+        if rel not in registered:
+            unregistered.append(rel)
+    return unregistered
+
+
+def collect_upload_blockers(task_path: Path, task: dict[str, Any]) -> list[str]:
+    blockers: list[str] = []
+    for product in task.get("products") or []:
+        product_id = product.get("local_id") or "<unknown>"
+        if not str(product.get("raw_description") or "").strip():
+            blockers.append(f"{product_id} 缺少产品说明")
+        pending = [
+            item for item in product.get("media") or []
+            if item.get("download_status") in PENDING_DOWNLOAD_STATUSES
+        ]
+        if pending:
+            seqs = ", ".join(str(item.get("sequence")) for item in pending)
+            blockers.append(f"{product_id} 仍有待下载素材：{seqs}")
+    unregistered = find_unregistered_media(task_path, task)
+    if unregistered:
+        blockers.append("cache 中存在未登记素材：" + ", ".join(unregistered))
+    return blockers
 
 
 def command_add_media(args: argparse.Namespace) -> str:
@@ -261,11 +326,41 @@ def command_finish(args: argparse.Namespace) -> str:
         task["status"] = "READY_TO_UPLOAD"
         task.setdefault("upload", {}).setdefault("status", "NOT_STARTED")
     product_count, image_count, video_count, pending_count = batch_counts(task)
+    blockers = collect_upload_blockers(task_path, task)
+    task.setdefault("upload", {})["preflight_blockers"] = blockers
     task["updated_at"] = now_iso()
     save_task(task_path, task)
+    suffix = "发送“确认上传”后才会写入飞书表。"
+    if blockers:
+        suffix = "上传前需处理：" + "；".join(blockers)
     return (
         f"本批次共 {product_count} 个商品，图片 {image_count} 张，"
-        f"视频 {video_count} 个，待处理素材 {pending_count} 个。发送“确认上传”后才会写入飞书表。"
+        f"视频 {video_count} 个，待处理素材 {pending_count} 个。{suffix}"
+    )
+
+
+def command_preflight(args: argparse.Namespace) -> str:
+    task_path = Path(args.task)
+    task = load_task(task_path)
+    blockers = collect_upload_blockers(task_path, task)
+    task.setdefault("upload", {})["preflight_blockers"] = blockers
+    task["updated_at"] = now_iso()
+    save_task(task_path, task)
+    if blockers:
+        raise IntakeError("上传前检查未通过：" + "；".join(blockers))
+    product_count, image_count, video_count, pending_count = batch_counts(task)
+    return f"上传前检查通过：{product_count} 个商品，图片 {image_count} 张，视频 {video_count} 个，待处理素材 {pending_count} 个。"
+
+
+def command_auth_scopes(args: argparse.Namespace) -> str:
+    scopes = " ".join(PRODUCT_INTAKE_SCOPES)
+    if args.command_only:
+        return f'lark-cli auth login --scope "{scopes}" --no-wait --json'
+    return (
+        "产品录入推荐一次性授权权限包：\n"
+        f"{scopes}\n"
+        "用于读取表字段、创建记录、上传附件、上传后读取核验。\n"
+        f'授权命令：lark-cli auth login --scope "{scopes}" --no-wait --json'
     )
 
 
@@ -295,6 +390,14 @@ def build_parser() -> argparse.ArgumentParser:
     finish = subparsers.add_parser("finish", help="finish collection and summarize the batch")
     finish.add_argument("--task", required=True)
     finish.set_defaults(handler=command_finish)
+
+    preflight = subparsers.add_parser("preflight", help="validate the batch before uploading")
+    preflight.add_argument("--task", required=True)
+    preflight.set_defaults(handler=command_preflight)
+
+    auth_scopes = subparsers.add_parser("auth-scopes", help="print recommended one-shot Lark auth scopes")
+    auth_scopes.add_argument("--command-only", action="store_true")
+    auth_scopes.set_defaults(handler=command_auth_scopes)
 
     status = subparsers.add_parser("status", help="show current intake status")
     status.add_argument("--task", required=True)

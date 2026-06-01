@@ -82,6 +82,12 @@ Feishu video messages may arrive through the platform gateway as `MessageType.VI
 {HERMES_HOME}/cache/documents/doc_<uuid>_<original>.mp4
 ```
 
+Newer gateway builds may cache videos under the video cache instead:
+
+```text
+{HERMES_HOME}/cache/videos/video_<uuid>.mp4
+```
+
 When a user reports that videos were sent but did not appear in product intake:
 
 1. Search all profile cache roots for video extensions, not just the intake product directory or image cache:
@@ -89,9 +95,11 @@ When a user reports that videos were sent but did not appear in product intake:
    - `{HERMES_HOME}/cache/videos/*.mp4`
    - `{HERMES_HOME}/video_cache/*.mp4`
    - `{HERMES_HOME}/cache/<task_id>/<product_id>/*.mp4`
-2. If matching files exist in `cache/documents/`, copy them into the deterministic intake cache path for the correct product and append each file to that product's `media[]` as `type: "video"` with its own sequence number.
-3. Preserve the original cached path in a recovery note such as `recovered_from` so upload/retry auditing can explain where the file came from.
-4. If maintaining the Feishu gateway code, make video downloads use the video cache helper rather than the document cache helper so future videos land under the video cache before intake processing.
+2. Check the active task JSON before answering. If `current_product.media[]` contains images but no video, compare message times against gateway logs for `type=video`, `Cached message video resource`, and `Flushing media batch ... video`.
+3. If matching files exist in `cache/documents/` or `cache/videos/`, copy them into the deterministic intake cache path for the correct product and append each file to that product's `media[]` as `type: "video"` with its own sequence number.
+4. Preserve the original cached path in a recovery note such as `recovered_from` so upload/retry auditing can explain where the file came from.
+5. If the logs show the video batch flushed separately from photo batches and the agent run was interrupted (`stream_interrupt_abort`, `interrupted_during_api_call`, or transport errors), treat it as a missed append rather than a failed Feishu receive; recover from cache and note the interruption in `notes[]`.
+6. If maintaining the Feishu gateway code, make video downloads use the video cache helper rather than the document cache helper so future videos land under the video cache before intake processing.
 
 ## Confirmation Input
 

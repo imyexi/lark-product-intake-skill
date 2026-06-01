@@ -207,10 +207,67 @@ class IntakeCliTests(unittest.TestCase):
             task = read_task(task_path)
             self.assertEqual(task["status"], "READY_TO_UPLOAD")
             self.assertEqual(task["upload"]["status"], "NOT_STARTED")
+            self.assertEqual(task["upload"]["preflight_blockers"], [])
             self.assertIsNone(task["current_product"])
             self.assertEqual(len(task["products"]), 1)
             self.assertEqual(task["products"][0]["status"], "SEALED")
             self.assertIn("本批次共 1 个商品，图片 1 张，视频 0 个", result.stdout)
+
+    def test_preflight_blocks_missing_description_pending_media_and_unregistered_cache(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cwd = Path(tmp)
+            task_path = cwd / "task.json"
+            write_task(task_path, status="READY_TO_UPLOAD")
+            task = read_task(task_path)
+            task["products"] = [
+                {
+                    "local_id": "p001",
+                    "status": "SEALED",
+                    "raw_description": "",
+                    "text_snippets": [],
+                    "parsed_fields": {},
+                    "media": [
+                        {
+                            "sequence": 1,
+                            "message_id": "msg_pending",
+                            "resource_key": "pending.jpg",
+                            "type": "image",
+                            "mime_type": "image/jpeg",
+                            "original_name": "pending.jpg",
+                            "cache_path": "cache/pi_test_001/p001/001.jpg",
+                            "received_at": "2026-05-30T12:00:00+08:00",
+                            "download_status": "DOWNLOADING",
+                            "upload_status": "PENDING",
+                            "error": None,
+                        }
+                    ],
+                    "base_record_id": None,
+                    "upload_status": "PENDING",
+                }
+            ]
+            task_path.write_text(json.dumps(task, ensure_ascii=False, indent=2), encoding="utf-8")
+            unregistered = cwd / "cache" / "pi_test_001" / "p001" / "002.mp4"
+            unregistered.parent.mkdir(parents=True)
+            unregistered.write_bytes(b"video")
+
+            result = self.run_cli("preflight", "--task", str(task_path), cwd=cwd)
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("p001 缺少产品说明", result.stderr)
+            self.assertIn("p001 仍有待下载素材：1", result.stderr)
+            self.assertIn("cache/pi_test_001/p001/002.mp4", result.stderr)
+            task = read_task(task_path)
+            self.assertEqual(len(task["upload"]["preflight_blockers"]), 3)
+
+    def test_auth_scopes_prints_one_shot_product_intake_bundle(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cwd = Path(tmp)
+            result = self.run_cli("auth-scopes", "--command-only", cwd=cwd)
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("base:field:read base:table:read base:record:create", result.stdout)
+            self.assertIn("base:record:update base:record:read docs:document.media:upload", result.stdout)
+            self.assertIn("--no-wait --json", result.stdout)
 
 
 if __name__ == "__main__":

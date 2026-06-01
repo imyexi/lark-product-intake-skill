@@ -56,7 +56,7 @@ Every image and video is a separate `media[]` item.
 | `查看当前`, `状态` | All states except `IDLE` | Return task state, current product number, text count, media counts, and pending work. |
 | `确认当前` | `COLLECTING_PRODUCTS`, `REVIEWING_PRODUCT` | Confirm current product from all text and all media. |
 | `下一个` | `COLLECTING_PRODUCTS`, `REVIEWING_PRODUCT` | Seal current non-empty product and create the next `EMPTY_DRAFT`. |
-| `录入结束` | `COLLECTING_PRODUCTS`, `REVIEWING_PRODUCT` | Seal current product and enter `READY_TO_UPLOAD`. |
+| `录入结束` / `结束录入` | `COLLECTING_PRODUCTS`, `REVIEWING_PRODUCT` | Seal current product and enter `READY_TO_UPLOAD`. |
 | `继续录入` | `READY_TO_UPLOAD` | Return to `COLLECTING_PRODUCTS`. |
 | `查看汇总` | `READY_TO_UPLOAD`, `UPLOADED`, `PARTIAL_UPLOADED` | Summarize products, media, mapping, and upload state. |
 | `确认上传` | `READY_TO_UPLOAD` | Start Base record creation and attachment upload. |

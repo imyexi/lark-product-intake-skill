@@ -103,7 +103,23 @@ base:field:read
 
 When the CLI wrapper is unavailable but app credentials are configured, a deterministic fallback is to call the OpenAPI directly: request `tenant_access_token` from `/open-apis/auth/v3/tenant_access_token/internal`, then call `/open-apis/bitable/v1/apps/{base_token}/tables/{table_id}/fields?page_size=100` with `Authorization: Bearer <tenant_access_token>`. Do not print app secrets or tenant tokens in logs or chat.
 
-For upload, the implementation also needs write and attachment scopes required by the local Feishu CLI/app configuration.
+For product intake, default to a one-shot "smooth upload" scope bundle for new users so field discovery, record creation, attachment upload, and read-back verification do not fail one step at a time:
+
+```bash
+lark-cli auth login --scope "base:field:read base:table:read base:record:create base:record:update base:record:read docs:document.media:upload" --no-wait --json
+```
+
+Generate and display the QR code as described in `references/lark-cli-auth-device-flow.md`, then after the user confirms authorization continue with `lark-cli auth login --device-code <device_code>` before retrying only failed work. Keep focused missing-scope recovery for high-sensitivity/minimum-permission mode, but do not make it the default product-intake path.
+
+Before `确认上传`, run the local preflight check when using `tools/intake_cli.py`:
+
+```bash
+python tools/intake_cli.py preflight --task <task.json>
+```
+
+The preflight must block upload when any sealed product lacks `raw_description`, any media is still `RECEIVED`/`DOWNLOADING`, or the task cache contains image/video files that are not registered in product `media[]`. Resolve or explicitly document the blocker before creating Base records.
+
+After a successful write/upload, verify only the created record IDs with projected fields to avoid loading large cell values: `+record-get --record-id ... --field-id <description> --field-id <image_attachment> --field-id <video_attachment> --format json --as user`.
 
 ## Record Creation
 
@@ -126,9 +142,13 @@ Command:
 lark-cli base +record-batch-create --base-token <base_token> --table-id <table_id> --json @batch-create.json --as user
 ```
 
+`lark-cli` treats `@file` inputs as safe local files: use a relative path within the current working directory, e.g. `cd` to the task directory and pass `--json @./batch-create.json`. Absolute paths such as `@/home/.../batch-create.json` are rejected.
+
 Persist returned `record_id_list` back to each product.
 
 ## Attachment Upload
+
+Upload attachments after record creation. Note that current `lark-cli` safe-file validation may reject absolute `--file` paths. If that happens, run the upload command from a common cache/root directory and pass each attachment as a relative `./...` path instead of weakening file-safety checks.
 
 Upload attachments after record creation:
 
@@ -139,9 +159,10 @@ lark-cli base +record-upload-attachment \
   --record-id <record_id> \
   --field-id <attachment_field_id_or_name> \
   --file <cache_path> \
-  --name <display_name> \
   --as user
 ```
+
+`+record-upload-attachment` appends one or more files to a cell. Repeat `--file` for grouped uploads; do not pass a `--name` flag unless the installed CLI version explicitly documents it.
 
 Rules:
 
@@ -150,6 +171,8 @@ Rules:
 - Mark each media item `UPLOADED` or `UPLOAD_FAILED`.
 - If some attachments fail, mark the product `PARTIAL_FAILED` and the task `PARTIAL_UPLOADED`.
 - `重试上传` must retry only failed records and failed media items.
+- After upload succeeds, do a read-back verification when possible: request `base:record:read` if missing, then read the created records with projections for the description/image/video fields and verify counts match local `media[]` counts before declaring final success.
+- `lark-cli` safe-file validation also applies to `--file`: use relative file paths from a suitable working directory (for example `cd` to the cache root and pass `--file ./<task_id>/<product>/<file>`), not absolute cache paths.
 
 ## Local Task Shape
 

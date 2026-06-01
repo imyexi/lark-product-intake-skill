@@ -23,17 +23,13 @@ lark-cli config bind --source hermes --identity user-default --force
 
 ## Scope Recovery
 
-For field discovery, a common missing scope is:
-
-```text
-base:field:read
-```
-
-Request only the missing scope instead of repeating a broad authorization:
+For product intake, use the one-shot scope bundle by default for new users:
 
 ```bash
-lark-cli auth login --scope "base:field:read" --no-wait --json
+lark-cli auth login --scope "base:field:read base:table:read base:record:create base:record:update base:record:read docs:document.media:upload" --no-wait --json
 ```
+
+This covers table/field discovery, record creation, attachment upload, and read-back verification in one authorization. Request only the exact missing scope instead when the operator explicitly chooses minimum-permission mode.
 
 The JSON includes `verification_url` and `device_code`. Generate and display a QR code before ending the turn:
 
